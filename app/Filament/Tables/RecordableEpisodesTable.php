@@ -41,6 +41,11 @@ class RecordableEpisodesTable
                     ->searchable()
                     ->sortable(),
 
+                TextColumn::make('season')
+                    ->label('Season #')
+                    ->sortable()
+                    ->toggleable(),
+
                 TextColumn::make('episode_num')
                     ->label('Ep #')
                     ->sortable()
