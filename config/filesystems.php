@@ -52,6 +52,13 @@ return [
             'throw' => false,
         ],
 
+        'recordings' => [
+            'driver' => 'local',
+            'root' => env('RECORDINGS_PATH', storage_path('app/recordings')),
+            'visibility' => 'private',
+            'throw' => false,
+        ],
+
         's3' => [
             'driver' => 's3',
             'key' => env('AWS_ACCESS_KEY_ID'),

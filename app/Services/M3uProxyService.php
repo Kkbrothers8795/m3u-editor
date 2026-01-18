@@ -1770,4 +1770,69 @@ class M3uProxyService
         // If here, return null
         return null;
     }
+
+    /**
+     * Public method to create a transcoded stream for recordings or other external use.
+     * Returns the full response from the proxy API including stream_id and endpoint.
+     *
+     * @param  string  $url  The source stream URL
+     * @param  string  $profile  The profile identifier (template or name)
+     * @param  array  $profileVariables  Variables to pass to the profile template
+     * @param  array  $metadata  Additional metadata for the stream
+     * @param  array|null  $failoverUrls  Optional failover URLs
+     * @param  string|null  $userAgent  Optional user agent
+     * @return array|null Response from proxy API or null on failure
+     */
+    public function createTranscodedStreamForRecording(
+        string $url,
+        string $profile,
+        array $profileVariables = [],
+        array $metadata = [],
+        ?array $failoverUrls = null,
+        ?string $userAgent = null
+    ): ?array {
+        try {
+            $endpoint = $this->apiBaseUrl.'/transcode';
+
+            $payload = [
+                'url' => $url,
+                'profile' => $profile,
+                'metadata' => $metadata,
+                'profile_variables' => $profileVariables,
+            ];
+
+            if ($failoverUrls) {
+                $payload['failover_urls'] = $failoverUrls;
+            }
+
+            if ($userAgent) {
+                $payload['user_agent'] = $userAgent;
+            }
+
+            $response = Http::timeout(10)->acceptJson()
+                ->withHeaders(array_filter([
+                    'X-API-Token' => $this->apiToken,
+                    'Content-Type' => 'application/json',
+                ]))
+                ->post($endpoint, $payload);
+
+            if ($response->successful()) {
+                return $response->json();
+            }
+
+            Log::error('Failed to create transcoded stream for recording', [
+                'status' => $response->status(),
+                'body' => $response->body(),
+            ]);
+
+            return null;
+        } catch (Exception $e) {
+            Log::error('Error creating transcoded stream for recording', [
+                'error' => $e->getMessage(),
+                'url' => $url,
+            ]);
+
+            return null;
+        }
+    }
 }

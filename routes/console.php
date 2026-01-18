@@ -61,3 +61,18 @@ Schedule::command('profiles:reconcile')
 Schedule::job(new \App\Jobs\RefreshPlaylistProfiles)
     ->everyFifteenMinutes()
     ->withoutOverlapping();
+
+// Schedule recordings
+Schedule::job(new \App\Jobs\ScheduleRecordings)
+    ->everyMinute()
+    ->withoutOverlapping();
+
+// Monitor active recordings
+Schedule::job(new \App\Jobs\MonitorRecordings)
+    ->everyFiveMinutes()
+    ->withoutOverlapping();
+
+// Cleanup old recordings
+Schedule::command('recordings:cleanup --days=30 --force')
+    ->daily()
+    ->withoutOverlapping();
