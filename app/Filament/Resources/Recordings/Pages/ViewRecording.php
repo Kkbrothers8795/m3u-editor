@@ -16,7 +16,7 @@ class ViewRecording extends ViewRecord
 {
     protected static string $resource = RecordingResource::class;
 
-    public static function schema(Schema $schema): Schema
+    public function infolist(Schema $schema): Schema
     {
         return $schema
             ->components([
@@ -137,53 +137,58 @@ class ViewRecording extends ViewRecord
     protected function getHeaderActions(): array
     {
         return [
-            Actions\Action::make('start_now')
-                ->label('Start Now')
-                ->icon('heroicon-o-play')
-                ->color('success')
-                ->requiresConfirmation()
-                ->action(function () {
-                    $this->record->update(['status' => 'scheduled']);
-                    StartRecording::dispatch($this->record);
-
-                    $this->notify('success', 'Recording started');
-                })
-                ->visible(fn () => $this->record->status === 'scheduled'),
-
-            Actions\Action::make('cancel')
-                ->label('Cancel Recording')
-                ->icon('heroicon-o-x-circle')
-                ->color('danger')
-                ->requiresConfirmation()
-                ->action(function () {
-                    $this->record->update([
-                        'status' => 'cancelled',
-                        'last_error' => 'Cancelled by user',
-                    ]);
-
-                    $this->notify('success', 'Recording cancelled');
-                })
-                ->visible(fn () => in_array($this->record->status, ['scheduled', 'recording'])),
-
-            Actions\Action::make('retry')
-                ->label('Retry Recording')
-                ->icon('heroicon-o-arrow-path')
-                ->color('warning')
-                ->requiresConfirmation()
-                ->action(function () {
-                    $this->record->incrementRetry();
-                    $this->record->update(['status' => 'scheduled']);
-                    StartRecording::dispatch($this->record);
-
-                    $this->notify('success', 'Recording retry scheduled');
-                })
-                ->visible(fn () => $this->record->status === 'failed' && $this->record->canRetry()),
-
             Actions\EditAction::make()
+                ->slideOver()
+                ->icon('heroicon-m-pencil')
+                ->color('gray')
                 ->visible(fn () => $this->record->status === 'scheduled'),
 
-            Actions\DeleteAction::make()
-                ->visible(fn () => $this->record->status !== 'recording'),
+            Actions\ActionGroup::make([
+                Actions\Action::make('start_now')
+                    ->label('Start Now')
+                    ->icon('heroicon-o-play')
+                    ->color('success')
+                    ->requiresConfirmation()
+                    ->action(function () {
+                        $this->record->update(['status' => 'scheduled']);
+                        StartRecording::dispatch($this->record);
+
+                        $this->notify('success', 'Recording started');
+                    })
+                    ->visible(fn () => $this->record->status === 'scheduled'),
+
+                Actions\Action::make('retry')
+                    ->label('Retry Recording')
+                    ->icon('heroicon-o-arrow-path')
+                    ->color('warning')
+                    ->requiresConfirmation()
+                    ->action(function () {
+                        $this->record->incrementRetry();
+                        $this->record->update(['status' => 'scheduled']);
+                        StartRecording::dispatch($this->record);
+
+                        $this->notify('success', 'Recording retry scheduled');
+                    })
+                    ->visible(fn () => $this->record->status === 'failed' && $this->record->canRetry()),
+
+                Actions\Action::make('cancel')
+                    ->label('Cancel Recording')
+                    ->icon('heroicon-o-x-circle')
+                    ->color('danger')
+                    ->requiresConfirmation()
+                    ->action(function () {
+                        $this->record->update([
+                            'status' => 'cancelled',
+                            'last_error' => 'Cancelled by user',
+                        ]);
+
+                        $this->notify('success', 'Recording cancelled');
+                    })
+                    ->visible(fn () => in_array($this->record->status, ['scheduled', 'recording'])),
+
+                Actions\DeleteAction::make()
+                    ->visible(fn () => $this->record->status !== 'recording'),
+            ])->button(),
         ];
     }
 }

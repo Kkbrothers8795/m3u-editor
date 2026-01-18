@@ -9,11 +9,14 @@ use App\Filament\Resources\Recordings\Pages\ViewRecording;
 use App\Filament\Tables\RecordableChannelsTable;
 use App\Filament\Tables\RecordableEpisodesTable;
 use App\Filament\Tables\RecordableSeriesTable;
+use App\Jobs\StartRecording;
 use App\Models\Channel;
 use App\Models\Episode;
 use App\Models\Recording;
 use App\Models\Series;
 use App\Traits\HasUserFiltering;
+use Filament\Actions\Action;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup as ActionsBulkActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction as ActionsDeleteBulkAction;
@@ -62,6 +65,7 @@ class RecordingResource extends Resource
                         Episode::class => 'Series Episode',
                         Series::class => 'Entire Series',
                     ])
+                    ->disabledOn(['edit'])
                     ->required()
                     ->live()
                     ->columnSpanFull(),
@@ -306,12 +310,60 @@ class RecordingResource extends Resource
                     ]),
             ])
             ->recordActions([
-                ViewAction::make(),
+                ActionGroup::make([
+                    Action::make('start_now')
+                        ->label('Start Now')
+                        ->icon('heroicon-o-play')
+                        ->color('success')
+                        ->requiresConfirmation()
+                        ->action(function ($record) {
+                            $record->update(['status' => 'scheduled']);
+                            StartRecording::dispatch($record);
+
+                            $this->notify('success', 'Recording started');
+                        })
+                        ->visible(fn ($record) => $record->status === 'scheduled'),
+
+                    Action::make('retry')
+                        ->label('Retry Recording')
+                        ->icon('heroicon-o-arrow-path')
+                        ->color('warning')
+                        ->requiresConfirmation()
+                        ->action(function ($record) {
+                            $record->incrementRetry();
+                            $record->update(['status' => 'scheduled']);
+                            StartRecording::dispatch($record);
+
+                            $this->notify('success', 'Recording retry scheduled');
+                        })
+                        ->visible(fn ($record) => $record->status === 'failed' && $record->canRetry()),
+
+                    Action::make('cancel')
+                        ->label('Cancel Recording')
+                        ->icon('heroicon-o-x-circle')
+                        ->color('danger')
+                        ->requiresConfirmation()
+                        ->action(function ($record) {
+                            $record->update([
+                                'status' => 'cancelled',
+                                'last_error' => 'Cancelled by user',
+                            ]);
+
+                            $this->notify('success', 'Recording cancelled');
+                        })
+                        ->visible(fn ($record) => in_array($record->status, ['scheduled', 'recording'])),
+
+                    DeleteAction::make()
+                        ->hidden(fn (Recording $record) => $record->status === 'recording'),
+                ])->button()->hiddenLabel()->size('sm'),
+
                 EditAction::make()
                     ->slideOver()
-                    ->hidden(fn (Recording $record) => in_array($record->status, ['recording', 'completed'])),
-                DeleteAction::make()
-                    ->hidden(fn (Recording $record) => $record->status === 'recording'),
+                    ->button()->hiddenLabel()->size('sm')
+                    ->disabled(fn (Recording $record) => in_array($record->status, ['recording', 'completed'])),
+
+                ViewAction::make()
+                    ->button()->hiddenLabel()->size('sm'),
             ], position: RecordActionsPosition::BeforeCells)
             ->toolbarActions([
                 ActionsBulkActionGroup::make([
