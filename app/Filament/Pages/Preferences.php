@@ -958,6 +958,114 @@ class Preferences extends SettingsPage
                                     ]),
                             ]),
 
+                        Tab::make('DVR')
+                            ->schema([
+                                Section::make('Recording file settings')
+                                    ->description('Configure where and how recordings are saved. Files are organized similar to .strm file generation with customizable path structure and filename formatting.')
+                                    ->columnSpan('full')
+                                    ->columns(1)
+                                    ->collapsible(false)
+                                    ->schema([
+                                        Toggle::make('recording_enabled')
+                                            ->live()
+                                            ->label('Enable recording functionality')
+                                            ->helperText('When disabled, all DVR/recording features will be unavailable.'),
+
+                                        TextInput::make('recording_file_location')
+                                            ->label('Recording Storage Location')
+                                            ->live()
+                                            ->rules([new CheckIfUrlOrLocalPath(localOnly: true, isDirectory: true)])
+                                            ->helperText('Base directory where recordings will be saved. This should be a local filesystem path that is writable by the application.')
+                                            ->maxLength(255)
+                                            ->required(fn ($get) => $get('recording_enabled'))
+                                            ->hidden(fn ($get) => ! $get('recording_enabled'))
+                                            ->placeholder('/recordings'),
+
+                                        Forms\Components\ToggleButtons::make('recording_file_path_structure')
+                                            ->label('Path structure (folders)')
+                                            ->live()
+                                            ->multiple()
+                                            ->grouped()
+                                            ->options([
+                                                'type' => 'Content Type (Channels/Series/Episodes)',
+                                                'playlist' => 'Playlist',
+                                                'category' => 'Category/Group',
+                                                'series' => 'Series Name',
+                                                'season' => 'Season',
+                                            ])
+                                            ->default(['type'])
+                                            ->helperText('Select folder structure. Files will be organized: Location / Type / Playlist / Category / etc.')
+                                            ->hidden(fn ($get) => ! $get('recording_enabled')),
+
+                                        Fieldset::make('Filename Metadata')
+                                            ->columnSpanFull()
+                                            ->schema([
+                                                Forms\Components\ToggleButtons::make('recording_filename_metadata')
+                                                    ->label('Include in filename')
+                                                    ->live()
+                                                    ->inline()
+                                                    ->multiple()
+                                                    ->columnSpanFull()
+                                                    ->options([
+                                                        'date' => 'Date',
+                                                        'time' => 'Time',
+                                                        'year' => 'Year',
+                                                        'episode' => 'Episode Number',
+                                                        'season' => 'Season Number',
+                                                    ])
+                                                    ->default(['date']),
+                                            ])
+                                            ->hidden(fn ($get) => ! $get('recording_enabled')),
+
+                                        Fieldset::make('Filename Cleansing')
+                                            ->columnSpanFull()
+                                            ->schema([
+                                                Toggle::make('recording_clean_special_chars')
+                                                    ->label('Clean special characters')
+                                                    ->helperText('Remove or replace special characters in filenames')
+                                                    ->default(true)
+                                                    ->inline(false),
+                                                Toggle::make('recording_remove_consecutive_chars')
+                                                    ->label('Remove consecutive replacement characters')
+                                                    ->default(true)
+                                                    ->inline(false)
+                                                    ->live(),
+                                                Forms\Components\ToggleButtons::make('recording_replace_char')
+                                                    ->label('Replace with')
+                                                    ->live()
+                                                    ->inline()
+                                                    ->grouped()
+                                                    ->columnSpanFull()
+                                                    ->options([
+                                                        'space' => 'Space',
+                                                        'dash' => '-',
+                                                        'underscore' => '_',
+                                                        'period' => '.',
+                                                        'remove' => 'Remove',
+                                                    ])
+                                                    ->default('space'),
+                                            ])
+                                            ->hidden(fn ($get) => ! $get('recording_enabled')),
+
+                                        Fieldset::make('Name Filtering')
+                                            ->columnSpanFull()
+                                            ->schema([
+                                                Toggle::make('recording_name_filter_enabled')
+                                                    ->label('Enable name filtering')
+                                                    ->helperText('Remove specific words or symbols from folder and file names')
+                                                    ->inline(false)
+                                                    ->live(),
+                                                Forms\Components\TagsInput::make('recording_name_filter_patterns')
+                                                    ->label('Patterns to remove')
+                                                    ->placeholder('Add pattern (e.g. "DE • " or "EN |")')
+                                                    ->helperText('Enter words, symbols or prefixes to remove from names. Press Enter after each pattern.')
+                                                    ->columnSpanFull()
+                                                    ->hidden(fn ($get) => ! $get('recording_name_filter_enabled')),
+                                            ])
+                                            ->hidden(fn ($get) => ! $get('recording_enabled')),
+                                    ]),
+                            ]),
+
                         Tab::make('Backups')
                             ->schema([
                                 Section::make('Automated backups')

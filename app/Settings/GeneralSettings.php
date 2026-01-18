@@ -179,6 +179,25 @@ class GeneralSettings extends Settings
 
     public ?int $tmdb_confidence_threshold = 80;
 
+    // DVR Recording file settings
+    public ?bool $recording_enabled = false;
+
+    public ?string $recording_file_location = null;
+
+    public ?array $recording_file_path_structure = null;
+
+    public ?array $recording_filename_metadata = null;
+
+    public ?bool $recording_clean_special_chars = true;
+
+    public ?bool $recording_remove_consecutive_chars = true;
+
+    public ?string $recording_replace_char = 'space';
+
+    public ?bool $recording_name_filter_enabled = false;
+
+    public ?array $recording_name_filter_patterns = null;
+
     public static function group(): string
     {
         return 'general';

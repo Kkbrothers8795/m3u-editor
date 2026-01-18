@@ -5,18 +5,22 @@ namespace App\Services;
 use App\Models\Recording;
 use App\Models\RecordingSegment;
 use App\Models\StrmFileMapping;
+use App\Settings\GeneralSettings;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\Process\Process;
 
 class RecordingService
 {
+    public function __construct(protected GeneralSettings $settings) {}
+
     /**
-     * Get the base recordings directory
+     * Get the base recordings directory (for final output)
      */
     public function getRecordingsDirectory(): string
     {
-        $baseDir = config('filesystems.disks.recordings.root', storage_path('app/recordings'));
+        $baseDir = $this->settings->recording_file_location
+            ?? config('filesystems.disks.recordings.root', storage_path('app/recordings'));
 
         if (! is_dir($baseDir)) {
             mkdir($baseDir, 0755, true);
@@ -26,21 +30,58 @@ class RecordingService
     }
 
     /**
-     * Get the output directory for a recording
+     * Get the temporary recordings directory (for segments during recording)
+     */
+    public function getTempRecordingsDirectory(): string
+    {
+        $tempDir = config('filesystems.disks.recordings_tmp.root', storage_path('app/recordings/tmp'));
+
+        if (! is_dir($tempDir)) {
+            mkdir($tempDir, 0755, true);
+        }
+
+        return $tempDir;
+    }
+
+    /**
+     * Get the output directory for a recording (final location)
      */
     public function getRecordingDirectory(Recording $recording): string
     {
         $baseDir = $this->getRecordingsDirectory();
-        $userDir = $baseDir.'/user_'.$recording->user_id;
+        $pathStructure = $this->settings->recording_file_path_structure ?? ['type'];
 
-        // Organize by type
-        $typeDir = match ($recording->recordable_type) {
-            'App\\Models\\Channel' => 'channels',
-            'App\\Models\\Episode' => 'series',
-            default => 'other',
-        };
+        $path = $baseDir;
 
-        $recordingDir = $userDir.'/'.$typeDir.'/recording_'.$recording->id;
+        foreach ($pathStructure as $component) {
+            $segment = match ($component) {
+                'type' => $this->getTypeFolder($recording),
+                'playlist' => $this->getPlaylistFolder($recording),
+                'category' => $this->getCategoryFolder($recording),
+                'series' => $this->getSeriesFolder($recording),
+                'season' => $this->getSeasonFolder($recording),
+                default => null,
+            };
+
+            if ($segment) {
+                $path .= '/'.$this->sanitizeFilename($segment);
+            }
+        }
+
+        if (! is_dir($path)) {
+            mkdir($path, 0755, true);
+        }
+
+        return $path;
+    }
+
+    /**
+     * Get the temporary output directory for recording segments
+     */
+    public function getTempRecordingDirectory(Recording $recording): string
+    {
+        $tempDir = $this->getTempRecordingsDirectory();
+        $recordingDir = $tempDir.'/recording_'.$recording->id;
 
         if (! is_dir($recordingDir)) {
             mkdir($recordingDir, 0755, true);
@@ -50,15 +91,184 @@ class RecordingService
     }
 
     /**
-     * Get the output file path for a recording
+     * Get the output file path for a recording (final location)
      */
     public function getOutputPath(Recording $recording): string
     {
         $dir = $this->getRecordingDirectory($recording);
+        $filename = $this->buildFilename($recording);
         $extension = $this->getFileExtension($recording);
-        $sanitizedTitle = $this->sanitizeFilename($recording->title);
 
-        return $dir.'/'.$sanitizedTitle.'.'.$extension;
+        return $dir.'/'.$filename.'.'.$extension;
+    }
+
+    /**
+     * Build filename with metadata
+     */
+    protected function buildFilename(Recording $recording): string
+    {
+        $metadata = $this->settings->recording_filename_metadata ?? [];
+        $parts = [];
+
+        // Base title
+        $parts[] = $recording->title;
+
+        // Add metadata based on settings
+        if (in_array('date', $metadata) && $recording->scheduled_start) {
+            $parts[] = $recording->scheduled_start->format('Y-m-d');
+        }
+
+        if (in_array('time', $metadata) && $recording->scheduled_start) {
+            $parts[] = $recording->scheduled_start->format('H-i');
+        }
+
+        if (in_array('year', $metadata)) {
+            $year = $this->getRecordableYear($recording);
+            if ($year) {
+                $parts[] = "({$year})";
+            }
+        }
+
+        if ($recording->recordable_type === 'App\\Models\\Episode') {
+            if (in_array('season', $metadata) || in_array('episode', $metadata)) {
+                $episode = $recording->recordable;
+                if ($episode) {
+                    $seasonEp = '';
+                    if (in_array('season', $metadata) && $episode->season) {
+                        $seasonEp .= 'S'.str_pad($episode->season, 2, '0', STR_PAD_LEFT);
+                    }
+                    if (in_array('episode', $metadata) && $episode->episode_num) {
+                        $seasonEp .= 'E'.str_pad($episode->episode_num, 2, '0', STR_PAD_LEFT);
+                    }
+                    if ($seasonEp) {
+                        $parts[] = $seasonEp;
+                    }
+                }
+            }
+        }
+
+        $filename = implode(' ', $parts);
+
+        return $this->sanitizeFilename($filename);
+    }
+
+    /**
+     * Get type folder name
+     */
+    protected function getTypeFolder(Recording $recording): string
+    {
+        return match ($recording->recordable_type) {
+            'App\\Models\\Channel' => 'Channels',
+            'App\\Models\\Episode' => 'Episodes',
+            'App\\Models\\Series' => 'Series',
+            default => 'Other',
+        };
+    }
+
+    /**
+     * Get playlist folder name
+     */
+    protected function getPlaylistFolder(Recording $recording): ?string
+    {
+        $recordable = $recording->recordable;
+        if (! $recordable) {
+            return null;
+        }
+
+        $playlistName = match ($recording->recordable_type) {
+            'App\\Models\\Channel' => $recordable->playlist?->name,
+            'App\\Models\\Episode' => $recordable->series?->playlist?->name,
+            'App\\Models\\Series' => $recordable->playlist?->name,
+            default => null,
+        };
+
+        return $playlistName ? $this->applyNameFiltering($playlistName) : null;
+    }
+
+    /**
+     * Get category/group folder name
+     */
+    protected function getCategoryFolder(Recording $recording): ?string
+    {
+        $recordable = $recording->recordable;
+        if (! $recordable) {
+            return null;
+        }
+
+        $categoryName = match ($recording->recordable_type) {
+            'App\\Models\\Channel' => $recordable->group?->name,
+            'App\\Models\\Episode' => $recordable->series?->category?->name,
+            'App\\Models\\Series' => $recordable->category?->name,
+            default => null,
+        };
+
+        return $categoryName ? $this->applyNameFiltering($categoryName) : null;
+    }
+
+    /**
+     * Get series folder name
+     */
+    protected function getSeriesFolder(Recording $recording): ?string
+    {
+        if ($recording->recordable_type !== 'App\\Models\\Episode') {
+            return null;
+        }
+
+        $episode = $recording->recordable;
+        $seriesName = $episode?->series?->name;
+
+        return $seriesName ? $this->applyNameFiltering($seriesName) : null;
+    }
+
+    /**
+     * Get season folder name
+     */
+    protected function getSeasonFolder(Recording $recording): ?string
+    {
+        if ($recording->recordable_type !== 'App\\Models\\Episode') {
+            return null;
+        }
+
+        $episode = $recording->recordable;
+        if (! $episode || ! $episode->season) {
+            return null;
+        }
+
+        return 'Season '.str_pad($episode->season, 2, '0', STR_PAD_LEFT);
+    }
+
+    /**
+     * Get year from recordable
+     */
+    protected function getRecordableYear(Recording $recording): ?string
+    {
+        $recordable = $recording->recordable;
+        if (! $recordable) {
+            return null;
+        }
+
+        return match ($recording->recordable_type) {
+            'App\\Models\\Series' => $recordable->release_date ? substr($recordable->release_date, 0, 4) : null,
+            'App\\Models\\Episode' => $recordable->series?->release_date ? substr($recordable->series->release_date, 0, 4) : null,
+            default => null,
+        };
+    }
+
+    /**
+     * Apply name filtering based on settings
+     */
+    protected function applyNameFiltering(string $name): string
+    {
+        if (! $this->settings->recording_name_filter_enabled) {
+            return $name;
+        }
+
+        $patterns = $this->settings->recording_name_filter_patterns ?? [];
+        foreach ($patterns as $pattern) {
+            $name = str_replace($pattern, '', $name);
+        }
+
+        return trim($name);
     }
 
     /**
@@ -80,23 +290,43 @@ class RecordingService
     }
 
     /**
-     * Sanitize filename
+     * Sanitize filename using settings
      */
     protected function sanitizeFilename(string $name): string
     {
-        // Remove invalid characters
-        $name = preg_replace('/[^a-zA-Z0-9_\- ]/', '', $name);
-        $name = preg_replace('/\s+/', '_', $name);
+        // Apply name filtering first
+        $name = $this->applyNameFiltering($name);
 
-        return trim($name, '_-');
+        // Use PlaylistService logic if clean special chars is enabled
+        if ($this->settings->recording_clean_special_chars) {
+            $replaceChar = $this->settings->recording_replace_char ?? 'space';
+            $name = PlaylistService::makeFilesystemSafe($name, $replaceChar);
+
+            // Remove consecutive replacement characters if enabled
+            if ($this->settings->recording_remove_consecutive_chars && $replaceChar !== 'remove') {
+                $char = match ($replaceChar) {
+                    'space' => ' ',
+                    'dash' => '-',
+                    'underscore' => '_',
+                    'period' => '.',
+                    default => ' ',
+                };
+
+                // Remove consecutive occurrences
+                $pattern = preg_quote($char, '/');
+                $name = preg_replace("/{$pattern}+/", $char, $name);
+            }
+        }
+
+        return trim($name) ?: 'Unnamed';
     }
 
     /**
-     * Create a new segment for recording
+     * Create a new segment for recording (in temporary directory)
      */
     public function createSegment(Recording $recording, int $segmentNumber): RecordingSegment
     {
-        $dir = $this->getRecordingDirectory($recording);
+        $dir = $this->getTempRecordingDirectory($recording);
         $extension = $this->getFileExtension($recording);
         $segmentPath = $dir.'/segment_'.str_pad($segmentNumber, 3, '0', STR_PAD_LEFT).'.'.$extension;
 
