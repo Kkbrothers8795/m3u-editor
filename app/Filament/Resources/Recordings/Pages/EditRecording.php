@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Recordings\Pages;
 
 use App\Filament\Resources\Recordings\RecordingResource;
+use Filament\Actions\DeleteAction;
 use Filament\Resources\Pages\EditRecord;
 
 class EditRecording extends EditRecord
@@ -12,7 +13,7 @@ class EditRecording extends EditRecord
     protected function getHeaderActions(): array
     {
         return [
-            \Filament\Actions\DeleteAction::make()
+            DeleteAction::make()
                 ->hidden(fn () => $this->record->status === 'recording'),
         ];
     }

@@ -5,10 +5,10 @@ namespace App\Filament\Resources\Recordings\Pages;
 use App\Filament\Resources\Recordings\RecordingResource;
 use App\Jobs\StartRecording;
 use Filament\Actions;
-use Filament\Forms\Components\Grid;
 use Filament\Forms\Components\Placeholder;
-use Filament\Forms\Components\Section;
 use Filament\Resources\Pages\ViewRecord;
+use Filament\Schemas\Components\Grid;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Illuminate\Support\Number;
 

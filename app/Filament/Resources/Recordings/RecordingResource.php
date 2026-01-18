@@ -2,6 +2,10 @@
 
 namespace App\Filament\Resources\Recordings;
 
+use App\Filament\Resources\Recordings\Pages\CreateRecording;
+use App\Filament\Resources\Recordings\Pages\EditRecording;
+use App\Filament\Resources\Recordings\Pages\ListRecordings;
+use App\Filament\Resources\Recordings\Pages\ViewRecording;
 use App\Models\Channel;
 use App\Models\Episode;
 use App\Models\Recording;
@@ -15,8 +19,8 @@ use Filament\Actions\ViewAction;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
-use Filament\Forms\Get;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Enums\RecordActionsPosition;
@@ -32,7 +36,9 @@ class RecordingResource extends Resource
 
     protected static ?string $recordTitleAttribute = 'title';
 
-    protected static string|\UnitEnum|null $navigationGroup = 'Playlist';
+    protected static string|\UnitEnum|null $navigationGroup = 'Proxy';
+
+    protected static ?int $navigationSort = 8;
 
     public static function getGloballySearchableAttributes(): array
     {
@@ -243,6 +249,7 @@ class RecordingResource extends Resource
             ->recordActions([
                 ViewAction::make(),
                 EditAction::make()
+                    ->slideOver()
                     ->hidden(fn (Recording $record) => in_array($record->status, ['recording', 'completed'])),
                 DeleteAction::make()
                     ->hidden(fn (Recording $record) => $record->status === 'recording'),
@@ -265,10 +272,10 @@ class RecordingResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index' => \App\Filament\Resources\Recordings\Pages\ListRecordings::route('/'),
-            'create' => \App\Filament\Resources\Recordings\Pages\CreateRecording::route('/create'),
-            'view' => \App\Filament\Resources\Recordings\Pages\ViewRecording::route('/{record}'),
-            'edit' => \App\Filament\Resources\Recordings\Pages\EditRecording::route('/{record}/edit'),
+            'index' => ListRecordings::route('/'),
+            // 'create' => CreateRecording::route('/create'),
+            'view' => ViewRecording::route('/{record}'),
+            // 'edit' => EditRecording::route('/{record}/edit'),
         ];
     }
 
