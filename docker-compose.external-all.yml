@@ -43,8 +43,8 @@ services:
       retries: 5
       start_period: 30s
     # Optional: Expose PostgreSQL port (uncomment if needed for external access)
-    # ports:
-    #   - "${PG_PORT:-5432}:5432"
+    ports:
+      - "5432:5432"
 
     # Optional: Resource limits
     deploy:
@@ -73,8 +73,8 @@ services:
       retries: 3
       start_period: 10s
     # Optional: Expose Redis port (uncomment if needed for external access)
-    # ports:
-    #   - "${REDIS_PORT:-6379}:6379"
+    ports:
+      - "6379:6379"
 
     # Optional: Resource limits
     deploy:
@@ -115,8 +115,8 @@ services:
       # - CLEANUP_INTERVAL=60
     restart: unless-stopped
     # Don't expose port externally - only accessible via internal network and nginx
-    # ports:
-    #   - "${M3U_PROXY_PORT:-38085}:${M3U_PROXY_PORT:-38085}"  # Uncomment only if you need direct external access
+    ports:
+      - "38085:38085"  # Uncomment only if you need direct external access
     networks:
       - m3u-network
     depends_on:
@@ -151,8 +151,8 @@ services:
 
       # Application URL (change to your domain or IP)
       # This should match your NGINX reverse proxy setup
-      - APP_URL=${APP_URL:-http://localhost}
-      - APP_PORT=${APP_PORT:-8080}
+      - APP_URL=${APP_URL}
+      - APP_PORT=${APP_PORT}
 
       # Web Server Configuration - DISABLE embedded NGINX
       - NGINX_ENABLED=false # Disable embedded NGINX, using external nginx service
@@ -220,13 +220,14 @@ services:
     container_name: m3u-nginx
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
       # Share public directory from m3u-editor container for static file serving
       - app-public:/var/www/html/public:ro
       # - ./data:/var/www/config:ro # For serving config files if needed
     restart: unless-stopped
     ports:
       - "${APP_PORT:-36400}:80"  # HTTP
-      # - "${NGINX_SSL_PORT:-443}:443"  # HTTPS (uncomment and configure SSL)
+      - "${NGINX_SSL_PORT:-443}:443"  # HTTPS (uncomment and configure SSL)
     networks:
       - m3u-network
     depends_on:
