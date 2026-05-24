@@ -24,7 +24,7 @@ services:
     container_name: m3u-editor
     environment:
       # Timezone
-      - TZ=Etc/UTC
+      - TZ=Asia/Kolkata
       
       # Application URL (change to your domain or IP)
       - APP_URL=${APP_URL:-http://localhost}
