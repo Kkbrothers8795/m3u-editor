@@ -63,6 +63,7 @@ services:
     volumes:
       # Persistent configuration data
       - ./data:/var/www/config
+      - /mnt/rc:/mnt
 
       # PostgreSQL data persistence
       - pgdata:/var/lib/postgresql/data
